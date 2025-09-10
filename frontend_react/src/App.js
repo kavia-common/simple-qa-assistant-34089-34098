@@ -3,18 +3,24 @@ import './App.css';
 
 /**
  * Derive the backend base URL from environment variables with a sensible default.
- * Uses:
- * - REACT_APP_API_BASE for full URL override
- * - REACT_APP_API_HOST and REACT_APP_API_PORT to construct http://HOST:PORT
- * Defaults to http://localhost:3001
+ * Priority:
+ * 1. REACT_APP_API_BASE (full absolute URL, e.g. https://api.example.com/api)
+ * 2. REACT_APP_API_HOST + REACT_APP_API_PORT -> http://HOST:PORT
+ * 3. Default to relative '' so CRA dev proxy can forward /api to 3001 (avoids CORS in dev)
  */
 function useApiBase() {
   const base = useMemo(() => {
     const explicit = process.env.REACT_APP_API_BASE;
     if (explicit) return explicit.replace(/\/+$/, '');
-    const host = process.env.REACT_APP_API_HOST || 'localhost';
-    const port = process.env.REACT_APP_API_PORT || '3001';
-    return `http://${host}:${port}`;
+    const host = process.env.REACT_APP_API_HOST;
+    const port = process.env.REACT_APP_API_PORT;
+    if (host || port) {
+      const h = host || 'localhost';
+      const p = port || '3001';
+      return `http://${h}:${p}`;
+    }
+    // Use relative base by default so that CRA proxy handles CORS in dev
+    return '';
   }, []);
   return base;
 }
@@ -58,7 +64,10 @@ function App() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${apiBase}/api/ask`, {
+      // Prefer trailing slash to match backend path definition (/api + /ask/)
+      const askPath = '/api/ask/';
+      const url = `${apiBase}${askPath}`;
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question })
@@ -138,7 +147,10 @@ function App() {
           </button>
         </form>
         <div className="api-tip">
-          Backend: <code>{apiBase}/api/ask</code> — override with REACT_APP_API_BASE or host/port env vars.
+          Backend endpoint: <code>{`${apiBase || ''}/api/ask/`}</code>
+          <br />
+          Tip: In development, we route via CRA proxy (package.json "proxy" -> http://localhost:3001) to avoid CORS.
+          Use REACT_APP_API_BASE (or REACT_APP_API_HOST/REACT_APP_API_PORT) to call directly without the proxy.
         </div>
       </footer>
     </div>
